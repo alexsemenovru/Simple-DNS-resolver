@@ -40,7 +40,7 @@ route add 91.108.4.0 mask 255.255.252.0 0.0.0.0
 ```
 
 IPv6 is written to a separate file: in Russia ISPs almost never provide IPv6,
-and Keenetic devices can misbehave with such addresses.
+and some routers (Keenetic, for example) can misbehave with such addresses.
 
 ## Quick start
 
@@ -174,14 +174,19 @@ python3 tests/test_dns_resolver.py
 server is started. In environments where UDP on loopback is not delivered, the
 network tests are reported as skipped rather than failing.
 
-## Where the source came from
+## Inspiration
 
-The tool grew out of a small utility whose source had been lost. Its behaviour
-was reconstructed from the bytecode of the compiled exe
-(`recovered/dns_resolver.py` is the reference) and is pinned by the
-`TestLegacyParity` test: old and new code run on the same input, and both the
-log and the route files are compared.
+The project is inspired by
+[DomainMapper](https://github.com/Ground-Zerro/DomainMapper/): the set of output
+formats — `win`, `unix`, `keenetic`, `keenetic-bat`, `mikrotik`, `ovpn`,
+`wireguard`, `amnezia`, `cidr` and `ip` — comes from there. There are two
+deliberate differences: `--unix` adds `add` and `via`/`dev` (without them the
+command does not add a route), and the prefix is taken from the network itself
+instead of being chosen by hand.
 
+It started as a small personal utility for turning IPs into routes. Its
+reference behaviour was reconstructed from bytecode and lives in
+`recovered/dns_resolver.py`; the `TestLegacyParity` test relies on it.
 ## License
 
 [MIT](LICENSE)

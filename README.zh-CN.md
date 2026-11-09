@@ -38,8 +38,7 @@ route add 1.2.3.4 mask 255.255.255.255 0.0.0.0
 route add 91.108.4.0 mask 255.255.252.0 0.0.0.0
 ```
 
-IPv6 写入单独的文件：在俄罗斯运营商几乎不提供 IPv6，而 Keenetic 设备在
-这类地址上可能出问题。
+IPv6 写入单独的文件：在俄罗斯运营商几乎不提供 IPv6，而某些路由器（例如 Keenetic）在这类地址上可能出问题。
 
 ## 快速开始
 
@@ -168,12 +167,16 @@ python3 tests/test_dns_resolver.py
 65 项检查，无需联网：DNS 用桩替换，`--dns` 时启动本地 UDP 服务器。在无法
 投递 loopback UDP 的环境中，网络相关测试标记为跳过而不是失败。
 
-## 源码的来历
+## 灵感来源
 
-这个工具源自一个小程序，其源码曾经丢失。程序行为由已编译 exe 的字节码还原
-（`recovered/dns_resolver.py` 为基准），并由 `TestLegacyParity` 测试固定：
-新旧代码在同一输入上运行，比较日志和路由文件。
+本项目受 [DomainMapper](https://github.com/Ground-Zerro/DomainMapper/) 启发：
+输出格式集合（`win`、`unix`、`keenetic`、`keenetic-bat`、`mikrotik`、`ovpn`、
+`wireguard`、`amnezia`、`cidr`、`ip`）取自该项目。有两处刻意的不同：`--unix`
+增加了 `add` 与 `via`/`dev`（否则命令不会添加路由），前缀取自网络本身，而
+不是手动选择。
 
+它最初是一个把 IP 转换成路由的小工具。其基准行为由字节码还原，保存在
+`recovered/dns_resolver.py`，`TestLegacyParity` 测试依赖它。
 ## 许可证
 
 [MIT](LICENSE)
