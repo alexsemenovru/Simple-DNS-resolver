@@ -114,6 +114,8 @@ language is detected from the system; `--lang en|ru|es|zh` overrides it.
     --dns-timeout SEC     per-query timeout              (2.0)
     --jobs N              parallel lookups               (8)
     --retries N           attempts per name              (2)
+    --aggregate-budget N  up to N extra addresses (0 disables)
+    --aggregate-max P     no blocks larger than /P     (24)
     --sort --strict --modern
     --passthrough / --no-passthrough
     --persistent          route -p add for IPv4 in win
@@ -135,6 +137,29 @@ dns_resolver.exe -o --modern
 
 Without those flags you get "Press Enter to exit..." at the end, so a window
 opened by double-click does not close immediately.
+
+## Subnet aggregation
+
+Adjacent addresses are merged into subnets: two in a row become `/31`, four
+become `/30`. This does not widen the routing scope — coverage stays exactly the
+same as in the list, so aggregation is always on. On a file with 5 827
+addresses it gives 4 157 lines instead of 5 827 (−28.7 %) with no extra
+addresses at all.
+
+To shrink further, let a block take in a few addresses that were not in the
+list:
+
+```
+dns_resolver.exe --aggregate-budget 2
+```
+
+`--aggregate-budget 0` disables aggregation entirely — the file gets individual
+addresses. `--aggregate-max 24` (the default) forbids blocks larger than `/24`:
+16 allows `/16`, and 32 effectively turns merging off.
+
+> With a non-zero budget the routes will cover addresses that were not in the
+> list: the routing scope widens. That is a deliberate trade-off for routing
+> table size, worth remembering for split tunnelling.
 
 ## What it does and does not do
 

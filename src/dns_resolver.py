@@ -19,6 +19,7 @@
 """
 
 import argparse
+import bisect
 import ipaddress
 import os
 import re
@@ -33,7 +34,7 @@ from urllib.parse import urlparse
 import i18n
 import dnsclient
 
-VERSION = "3.3.0"
+VERSION = "3.4.0"
 
 # Три состояния ключа пути: не указан, указан без значения, указан со значением.
 UNSET = object()
@@ -114,6 +115,108 @@ def path_or_default(value, default):
     return value
 
 
+class Coverage:
+    """Сколько адресов из набора покрыто диапазоном — быстро, по интервалам."""
+
+    def __init__(self, intervals):
+        self.intervals = intervals
+        self.ends = [end for _, end in intervals]
+        self.before_ = []
+        total = 0
+        for start, end in intervals:
+            self.before_.append(total)
+            total += end - start
+        self.total = total
+
+    def covered_before(self, point):
+        index = bisect.bisect_right(self.ends, point)
+        if index >= len(self.intervals):
+            return self.total
+        total = self.before_[index]
+        start, _ = self.intervals[index]
+        if start < point:
+            total += point - start
+        return total
+
+    def count(self, low, high):
+        return self.covered_before(high) - self.covered_before(low)
+
+
+def to_intervals(records):
+    """Объединяет сети в непересекающиеся интервалы адресов."""
+    spans = sorted(
+        (int(record.network.network_address),
+         int(record.network.network_address) + record.network.num_addresses)
+        for record in records
+        if record.network.num_addresses
+    )
+    merged = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def walk_blocks(coverage, low, prefix, bits, max_prefix, budget, out, exact):
+    """Дерево префиксов: сливаем в блок, если он не крупнее max_prefix.
+
+    budget — сколько адресов, которых не было в списке, допускается «прихватить».
+    При budget = 0 сливаются только полностью покрытые блоки (свёртка без потерь).
+    Блок, который уже был во входе, никогда не дробится — свёртка только укрупняет.
+    """
+    size = 1 << (bits - prefix)
+    count = coverage.count(low, low + size)
+    if count == 0:
+        return
+
+    if (low, prefix) in exact:
+        out.append((low, prefix))
+        return
+
+    if prefix >= max_prefix and size - count <= budget:
+        out.append((low, prefix))
+        return
+
+    if prefix >= bits:
+        out.append((low, bits))
+        return
+
+    half = size >> 1
+    walk_blocks(coverage, low, prefix + 1, bits, max_prefix, budget, out, exact)
+    walk_blocks(coverage, low + half, prefix + 1, bits, max_prefix, budget, out,
+                exact)
+
+
+def aggregate_records(records, settings):
+    """Свёртка маршрутов в подсети. Область покрытия не сужается."""
+    if not records:
+        return records
+
+    family = records[0].family
+    if family == 4:
+        bits, max_prefix = 32, min(max(settings.aggregate_max, 0), 32)
+        factory = ipaddress.IPv4Network
+    else:
+        bits, max_prefix = 128, min(max(settings.aggregate_max_v6, 0), 128)
+        factory = ipaddress.IPv6Network
+
+    coverage = Coverage(to_intervals(records))
+    exact = {(int(record.network.network_address), record.network.prefixlen)
+             for record in records}
+    blocks = []
+    walk_blocks(coverage, 0, 0, bits, max_prefix, settings.aggregate_budget,
+                blocks, exact)
+
+    aggregated = []
+    for low, prefix in blocks:
+        record = RouteRecord(family, factory((low, prefix)))
+        record.line = format_record(record, settings)
+        aggregated.append(record)
+    return aggregated
+
+
 class Settings:
     """Все настройки прогона в одном месте."""
 
@@ -146,6 +249,18 @@ class Settings:
         # Повторы не нужны никогда: схлопываем их всегда, без возможности
         # отключить — иначе на выходе снова тысячи лишних строк.
         self.dedup = True
+
+        # Свёртка в подсети. Без ключа — точная (без «лишних» адресов).
+        # Явный --aggregate-budget 0 выключает свёртку совсем.
+        budget = args.aggregate_budget
+        if budget is UNSET:
+            self.aggregate_enabled = True
+            self.aggregate_budget = 0
+        else:
+            self.aggregate_budget = max(0, budget)
+            self.aggregate_enabled = self.aggregate_budget > 0
+        self.aggregate_max = args.aggregate_max
+        self.aggregate_max_v6 = args.aggregate_max_v6
         self.sort = args.sort or args.modern
         self.strict = args.strict or args.modern
         self.modern = args.modern or args.strict
@@ -508,10 +623,24 @@ def finalize(records, settings):
     if settings.sort:
         records = sorted(records, key=lambda r: r.sort_key())
 
+    return records
+
+
+def prepare(records, settings):
+    """Дедупликация → свёртка в подсети → проверка формата.
+
+    Возвращает (записи, сколько их было после дедупликации).
+    """
+    records = finalize(records, settings)
+    after_dedup = len(records)
+
+    if settings.aggregate_enabled:
+        records = aggregate_records(records, settings)
+
     if settings.strict:
         validate_records(records, settings)
 
-    return records
+    return records, after_dedup
 
 
 def build_payload(records, spec):
@@ -695,8 +824,8 @@ def finish_legacy(settings, v4_records, v6_records, counters, total):
     say = settings.say
     v4_before = len(v4_records)
 
-    v4_records = finalize(v4_records, settings)
-    v6_records = finalize(v6_records, settings)
+    v4_records, v4_deduped = prepare(v4_records, settings)
+    v6_records, _ = prepare(v6_records, settings)
 
     spec = settings.spec()
     v4_parts = write_output(settings.output_path, v4_records, spec, settings)
@@ -706,8 +835,10 @@ def finish_legacy(settings, v4_records, v6_records, counters, total):
     print(say("l_total_legacy", ok=counters["resolved"], total=total))
     print(say("l_total_ipv4", n=counters["ipv4"]))
     print(say("l_total_ipv6", n=counters["ipv6"]))
-    if v4_before != len(v4_records):
-        print(say("l_dups", n=v4_before - len(v4_records)))
+    if v4_before != v4_deduped:
+        print(say("l_dups", n=v4_before - v4_deduped))
+    if v4_deduped != len(v4_records):
+        print(say("l_aggregated", before=v4_deduped, after=len(v4_records)))
 
     print()
     for path, count in v4_parts:
@@ -721,8 +852,8 @@ def finish_modern(settings, v4_records, v6_records, counters, total):
     say = settings.say
     v4_before = len(v4_records)
 
-    v4_records = finalize(v4_records, settings)
-    v6_records = finalize(v6_records, settings)
+    v4_records, v4_deduped = prepare(v4_records, settings)
+    v6_records, _ = prepare(v6_records, settings)
 
     spec = settings.spec()
     v4_parts = write_output(settings.output_path, v4_records, spec, settings)
@@ -733,9 +864,11 @@ def finish_modern(settings, v4_records, v6_records, counters, total):
     print(say("l_modern_total", domains=counters["resolved"],
               passed=counters["passthrough"], lines=total))
 
-    dups = v4_before - len(v4_records)
+    dups = v4_before - v4_deduped
     suffix = say("l_dups_suffix", n=dups) if dups else ""
     print(say("l_routes_written", family="IPv4", n=len(v4_records)) + suffix)
+    if v4_deduped != len(v4_records):
+        print(say("l_aggregated", before=v4_deduped, after=len(v4_records)))
     print(say("l_routes_written", family="IPv6", n=len(v6_records)))
     print(say("l_format", format=settings.format,
               example=say(spec.example_key)))
@@ -828,6 +961,12 @@ def build_parser(language):
                            help=say("h_jobs"))
     behaviour.add_argument("--retries", type=int, default=2, metavar="N",
                            help=say("h_retries"))
+    behaviour.add_argument("--aggregate-budget", type=int, default=UNSET,
+                           metavar="N", help=say("h_aggregate_budget"))
+    behaviour.add_argument("--aggregate-max", type=int, default=24,
+                           metavar="PREFIX", help=say("h_aggregate_max"))
+    behaviour.add_argument("--aggregate-max-v6", type=int, default=64,
+                           metavar="PREFIX", help=say("h_aggregate_max_v6"))
     behaviour.add_argument("--sort", action="store_true", help=say("h_sort"))
     behaviour.add_argument("--passthrough", dest="passthrough",
                            action="store_true", default=True,

@@ -170,6 +170,19 @@ class TestLegacyParity(Base):
         return "".join(line for line in text.splitlines(keepends=True)
                        if not line.startswith("Повторов убрано"))
 
+    @staticmethod
+    def coverage(raw):
+        """Множество адресов, покрытых файлом маршрутов."""
+        values = set()
+        for line in raw.decode("utf-8").splitlines():
+            match = re.match(r"^route add (\S+) mask (\S+)", line)
+            if not match:
+                continue
+            network = ipaddress.ip_network(
+                f"{match.group(1)}/{match.group(2)}", strict=False)
+            values.update(int(address) for address in network)
+        return values
+
     def test_stdout_and_files_identical(self):
         self.write_input([
             "a.example", "c.example", "v6.example", "both.example",
@@ -188,7 +201,9 @@ class TestLegacyParity(Base):
 
         self.assertEqual(code, 0)
         self.assertEqual(old_stdout, self.without_dupe_note(new_stdout))
-        self.assertEqual(old_routes, self.read("output.txt"))
+        # свёртка меняет нарезку строк, но не покрытие: сравниваем адреса
+        self.assertEqual(self.coverage(old_routes),
+                         self.coverage(self.read("output.txt")))
         self.assertEqual(old_v6, self.read("output-IPv6.txt"))
 
     def test_missing_input(self):
@@ -780,6 +795,105 @@ class TestLanguage(Base):
             for language in i18n.LANGUAGES:
                 self.assertEqual(base, set(pattern.findall(entry[language])),
                                  f"{key}: {language}")
+
+
+class TestAggregation(Base):
+    """Свёртка в подсети: по умолчанию точная, --aggregate-budget 0 отключает."""
+
+    def lines_for(self, addresses, *argv):
+        self.write_input(addresses)
+        code, _ = self.run_new(*argv)
+        self.assertEqual(code, 0)
+        return self.lines()
+
+    def test_adjacent_pair_becomes_slash31(self):
+        self.assertEqual(self.lines_for(["1.2.3.4", "1.2.3.5"]),
+                         ["route add 1.2.3.4 mask 255.255.255.254 0.0.0.0"])
+
+    def test_four_addresses_become_slash30(self):
+        self.assertEqual(
+            self.lines_for(["1.2.3.8", "1.2.3.9", "1.2.3.10", "1.2.3.11"]),
+            ["route add 1.2.3.8 mask 255.255.255.252 0.0.0.0"])
+
+    def test_non_adjacent_stays_single(self):
+        self.assertEqual(self.lines_for(["8.8.8.8", "9.9.9.9"]), [
+            "route add 8.8.8.8 mask 255.255.255.255 0.0.0.0",
+            "route add 9.9.9.9 mask 255.255.255.255 0.0.0.0",
+        ])
+
+    def test_budget_zero_disables_aggregation(self):
+        self.assertEqual(self.lines_for(["1.2.3.4", "1.2.3.5"],
+                                        "--aggregate-budget", "0"), [
+            "route add 1.2.3.4 mask 255.255.255.255 0.0.0.0",
+            "route add 1.2.3.5 mask 255.255.255.255 0.0.0.0",
+        ])
+
+    def test_budget_allows_one_extra_address(self):
+        self.assertEqual(self.lines_for(["8.8.8.8"], "--aggregate-budget", "1"),
+                         ["route add 8.8.8.8 mask 255.255.255.254 0.0.0.0"])
+
+    def test_budget_does_not_exceed_limit(self):
+        # одному адресу /31 стоит 1 лишний (можно), /30 — 3 (нельзя)
+        self.assertEqual(self.lines_for(["8.8.8.8"], "--aggregate-budget", "2"),
+                         ["route add 8.8.8.8 mask 255.255.255.254 0.0.0.0"])
+        self.assertEqual(self.lines_for(["8.8.8.8"], "--aggregate-budget", "1"),
+                         ["route add 8.8.8.8 mask 255.255.255.254 0.0.0.0"])
+
+    def test_max_prefix_caps_block_size(self):
+        addresses = [f"10.0.0.{i}" for i in range(8)]
+        wide = self.lines_for(addresses, "--modern")
+        self.assertEqual(wide, ["route add 10.0.0.0 mask 255.255.255.248 0.0.0.0"])
+
+        narrow = self.lines_for(addresses, "--modern", "--aggregate-max", "30")
+        self.assertEqual(sorted(narrow), [
+            "route add 10.0.0.0 mask 255.255.255.252 0.0.0.0",
+            "route add 10.0.0.4 mask 255.255.255.252 0.0.0.0",
+        ])
+
+    def test_input_block_is_never_split(self):
+        self.assertEqual(
+            self.lines_for(["10.0.0.0/24", "10.0.0.5"], "--aggregate-max", "32"),
+            ["route add 10.0.0.0 mask 255.255.255.0 0.0.0.0"])
+
+    def test_contained_address_is_absorbed(self):
+        self.assertEqual(self.lines_for(["10.0.0.0/24", "10.0.0.5"]),
+                         ["route add 10.0.0.0 mask 255.255.255.0 0.0.0.0"])
+
+    def test_ipv6_aggregation(self):
+        self.write_input(["2001:db8::2", "2001:db8::3"])
+        code, _ = self.run_new()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.read("output-IPv6.txt").decode(),
+                         "route -p add 2001:db8::2/127 interface=0" + new.EOL)
+
+    def test_cidr_format_shows_blocks(self):
+        self.assertEqual(self.lines_for(["1.2.3.4", "1.2.3.5"], "--cidr"),
+                         ["1.2.3.4/31"])
+
+    def test_resulting_networks_do_not_overlap(self):
+        import ipaddress
+
+        addresses = [str(ipaddress.IPv4Address(0xC0A80000 + offset))
+                     for offset in (0, 1, 2, 3, 4, 8, 9, 16, 17, 18, 19, 20)]
+        self.write_input(addresses)
+        code, _ = self.run_new("--modern", "--cidr")
+        self.assertEqual(code, 0)
+
+        networks = [ipaddress.ip_network(line) for line in self.lines()]
+        for first, second in zip(networks, networks[1:]):
+            self.assertFalse(first.overlaps(second), f"{first} и {second}")
+
+        covered = set()
+        for network in networks:
+            covered.update(int(address) for address in network)
+        for address in addresses:
+            self.assertIn(int(ipaddress.ip_address(address)), covered)
+
+    def test_summary_reports_aggregation(self):
+        self.write_input(["1.2.3.4", "1.2.3.5"])
+        code, out = self.run_new()
+        self.assertEqual(code, 0)
+        self.assertIn("Свёрнуто в подсети: 2 → 1", out)
 
 
 class TestPathsAndPause(Base):

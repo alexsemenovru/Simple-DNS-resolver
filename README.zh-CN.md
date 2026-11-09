@@ -110,6 +110,8 @@ chmod +x dns_resolver
     --dns-timeout SEC     单次查询超时                (2.0)
     --jobs N              并发查询数                  (8)
     --retries N           每个名称的尝试次数          (2)
+    --aggregate-budget N  每块最多 N 个额外地址（0 关闭）
+    --aggregate-max P     不创建大于 /P 的块          (24)
     --sort --strict --modern
     --passthrough / --no-passthrough
     --persistent          win 格式下对 IPv4 使用 route -p add
@@ -130,6 +132,25 @@ dns_resolver.exe -o --modern
 
 不使用这些参数时，结尾会显示「按 Enter 退出...」，以免双击运行时窗口
 立刻关闭。
+
+## 合并为子网
+
+相邻地址会合并为子网：两个相邻地址合成 `/31`，四个合成 `/30`。这不会扩大
+路由范围——覆盖范围与列表完全一致，因此合并始终开启。在 5 827 个地址的文件
+上，得到 4 157 行而不是 5 827 行（−28.7%），且没有多余地址。
+
+若需要进一步压缩，可以允许每个块额外包含少量不在列表中的地址：
+
+```
+dns_resolver.exe --aggregate-budget 2
+```
+
+`--aggregate-budget 0` 完全关闭合并，文件中将是单个地址。
+`--aggregate-max 24`（默认）禁止创建大于 `/24` 的块：设为 16 允许 `/16`，
+设为 32 实际上关闭合并。
+
+> 预算大于零时，路由会覆盖列表中原本没有的地址，路由范围会扩大。这是为
+> 缩小路由表体积而做出的有意取舍。
 
 ## 做了什么，没做什么
 

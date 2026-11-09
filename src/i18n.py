@@ -360,6 +360,33 @@ CATALOG = {
         "es": "índice de interfaz para IPv6 en formato win",
         "zh": "win 格式下 IPv6 的接口索引",
     },
+    "h_aggregate_budget": {
+        "en": "allow up to N extra addresses per block (default: exact merging, "
+              "no extra addresses); 0 disables aggregation entirely",
+        "ru": "разрешить до N лишних адресов в блоке (по умолчанию — только "
+              "точная свёртка, без лишних); 0 отключает свёртку совсем",
+        "es": "permitir hasta N direcciones extra por bloque (por defecto solo "
+              "fusión exacta); 0 desactiva la fusión por completo",
+        "zh": "每个块允许最多 N 个额外地址（默认仅精确合并）；0 完全关闭合并",
+    },
+    "h_aggregate_max": {
+        "en": "never create blocks larger than /PREFIX (24 = at most a /24)",
+        "ru": "не создавать блоки крупнее /PREFIX (24 = максимум /24)",
+        "es": "nunca crear bloques mayores que /PREFIX (24 = como máximo /24)",
+        "zh": "不创建大于 /PREFIX 的块（24 = 最大 /24）",
+    },
+    "h_aggregate_max_v6": {
+        "en": "same limit for IPv6",
+        "ru": "тот же предел для IPv6",
+        "es": "el mismo límite para IPv6",
+        "zh": "IPv6 的同一限制",
+    },
+    "l_aggregated": {
+        "en": "Aggregated into subnets: {before} → {after}",
+        "ru": "Свёрнуто в подсети: {before} → {after}",
+        "es": "Fusionado en subredes: {before} → {after}",
+        "zh": "已合并为子网：{before} → {after}",
+    },
     "h_jobs": {
         "en": "parallel lookups (1 = one at a time); 8 is safe, 32+ may "
               "overload a home router",

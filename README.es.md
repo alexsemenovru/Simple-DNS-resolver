@@ -115,6 +115,8 @@ sistema; `--lang en|ru|es|zh` lo cambia.
     --dns-timeout SEC     tiempo de espera por consulta  (2.0)
     --jobs N              consultas en paralelo          (8)
     --retries N           intentos por nombre            (2)
+    --aggregate-budget N  hasta N direcciones extra (0 desactiva)
+    --aggregate-max P     bloques no mayores que /P    (24)
     --sort --strict --modern
     --passthrough / --no-passthrough
     --persistent          route -p add para IPv4 en win
@@ -136,6 +138,29 @@ dns_resolver.exe -o --modern
 
 Sin esas opciones al final aparece «Pulse Enter para salir...», para que la
 ventana no se cierre al abrir el programa con doble clic.
+
+## Fusión en subredes
+
+Las direcciones contiguas se fusionan en subredes: dos seguidas forman un `/31`,
+cuatro un `/30`. Esto no amplía el alcance del enrutado: la cobertura sigue
+siendo exactamente la de la lista, por eso la fusión está siempre activa. En un
+archivo de 5 827 direcciones da 4 157 líneas en lugar de 5 827 (−28,7 %) sin
+ninguna dirección extra.
+
+Para reducir más, permita que un bloque tome algunas direcciones que no estaban
+en la lista:
+
+```
+dns_resolver.exe --aggregate-budget 2
+```
+
+`--aggregate-budget 0` desactiva la fusión por completo: el archivo tendrá
+direcciones sueltas. `--aggregate-max 24` (por defecto) prohíbe bloques mayores
+que `/24`: 16 permite `/16`, y 32 desactiva de hecho la fusión.
+
+> Con un presupuesto distinto de cero las rutas cubrirán direcciones que no
+> estaban en la lista: el alcance del enrutado se amplía. Es un compromiso
+> deliberado por el tamaño de la tabla de rutas.
 
 ## Qué hace y qué no hace
 
