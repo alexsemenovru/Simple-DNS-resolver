@@ -10,7 +10,9 @@ import into a router.
 
 ## Download
 
-All files live in [Releases](../../releases).
+All files live in [Releases](../../releases). The same release carries
+`SHA256SUMS`: Linux — `sha256sum -c SHA256SUMS`, Windows —
+`Get-FileHash dns_resolver.exe -Algorithm SHA256`.
 
 | Platform | File | Tested on |
 |---|---|---|

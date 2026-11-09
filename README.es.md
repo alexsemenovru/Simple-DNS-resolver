@@ -10,7 +10,9 @@ aplicar o importar en un router.
 
 ## Descargar
 
-Todos los archivos están en [Releases](../../releases).
+Todos los archivos están en [Releases](../../releases). En la misma
+entrega está `SHA256SUMS`: Linux — `sha256sum -c SHA256SUMS`, Windows —
+`Get-FileHash dns_resolver.exe -Algorithm SHA256`.
 
 | Plataforma | Archivo | Probado en |
 |---|---|---|

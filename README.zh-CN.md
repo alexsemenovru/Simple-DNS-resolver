@@ -10,7 +10,9 @@ WireGuard 和 AmneziaVPN 的静态路由。
 
 ## 下载
 
-全部文件见 [Releases](../../releases)。
+全部文件见 [Releases](../../releases)。同一发布中附有 `SHA256SUMS`：
+Linux 用 `sha256sum -c SHA256SUMS`，Windows 用
+`Get-FileHash dns_resolver.exe -Algorithm SHA256`。
 
 | 平台 | 文件 | 测试环境 |
 |---|---|---|

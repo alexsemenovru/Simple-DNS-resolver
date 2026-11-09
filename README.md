@@ -10,7 +10,9 @@ Keenetic, Mikrotik, OpenVPN, WireGuard и AmneziaVPN.
 
 ## Скачать
 
-Все файлы — в разделе [Releases](../../releases).
+Все файлы — в разделе [Releases](../../releases). Рядом лежит
+`SHA256SUMS`: Linux — `sha256sum -c SHA256SUMS`, Windows —
+`Get-FileHash dns_resolver.exe -Algorithm SHA256`.
 
 | Платформа | Файл | Проверено |
 |---|---|---|
