@@ -153,6 +153,23 @@ class TestLegacyParity(Base):
             text = text.replace(old_text, new_text)
         return text
 
+    @staticmethod
+    def dedupe(raw):
+        """Старый exe писал дубли; новый схлопывает их всегда."""
+        seen, out = set(), []
+        for line in raw.decode("utf-8").splitlines(keepends=True):
+            key = line.rstrip("\r\n")
+            if key and key in seen:
+                continue
+            seen.add(key)
+            out.append(line)
+        return "".join(out).encode("utf-8")
+
+    @staticmethod
+    def without_dupe_note(text):
+        return "".join(line for line in text.splitlines(keepends=True)
+                       if not line.startswith("Повторов убрано"))
+
     def test_stdout_and_files_identical(self):
         self.write_input([
             "a.example", "c.example", "v6.example", "both.example",
@@ -164,13 +181,13 @@ class TestLegacyParity(Base):
         with redirect_stdout(buf):
             old.resolve_and_write_routes()
         old_stdout = self.normalize(buf.getvalue())
-        old_routes = self.read()
+        old_routes = self.dedupe(self.read())
         old_v6 = self.read("output-IPv6.txt")
 
         code, new_stdout = self.run_new("--no-passthrough", "--jobs", "1")
 
         self.assertEqual(code, 0)
-        self.assertEqual(old_stdout, new_stdout)
+        self.assertEqual(old_stdout, self.without_dupe_note(new_stdout))
         self.assertEqual(old_routes, self.read("output.txt"))
         self.assertEqual(old_v6, self.read("output-IPv6.txt"))
 
@@ -229,24 +246,29 @@ class TestFormat(Base):
 
 
 class TestDedup(Base):
-    def test_legacy_mode_keeps_duplicates(self):
-        self.write_input(["a.example", "b.example"])
-        self.run_new()
-        self.assertEqual(sum(self.routes().values()), 2)
+    """Повторы схлопываются всегда, отключить их нельзя."""
 
-    def test_dedup_flag_collapses(self):
+    def test_duplicates_removed_without_flags(self):
         self.write_input(["a.example", "b.example"])
-        code, out = self.run_new("--dedup")
+        code, out = self.run_new()
         self.assertEqual(code, 0)
         self.assertEqual(self.routes(), collections.Counter(
             {"route add 1.1.1.1 mask 255.255.255.255 0.0.0.0": 1}))
         self.assertIn("Повторов убрано: 1", out)
 
-    def test_dedup_sort_is_stable(self):
+    def test_no_way_to_disable(self):
+        # --dedup больше не существует, и другого способа вернуть дубли нет
+        self.write_input(["a.example", "b.example"])
+        proc = self.run_cli("--dedup")
+        self.assertNotEqual(proc.returncode, 0)
+        self.run_new("--no-passthrough")
+        self.assertEqual(sum(self.routes().values()), 1)
+
+    def test_sort_is_stable(self):
         self.write_input(["c.example", "a.example"])
-        self.run_new("--dedup", "--sort")
+        self.run_new("--sort")
         first = self.read()
-        self.run_new("--dedup", "--sort")
+        self.run_new("--sort")
         self.assertEqual(first, self.read())
         self.assertEqual(self.lines(), sorted(self.lines()))
 

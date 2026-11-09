@@ -110,7 +110,7 @@ chmod +x dns_resolver
     --dns-timeout SEC     单次查询超时                (2.0)
     --jobs N              并发查询数                  (8)
     --retries N           每个名称的尝试次数          (2)
-    --dedup --sort --strict --modern
+    --sort --strict --modern
     --passthrough / --no-passthrough
     --persistent          win 格式下对 IPv4 使用 route -p add
     --lang en|ru|es|zh
@@ -134,7 +134,7 @@ dns_resolver.exe -o --modern
 ## 做了什么，没做什么
 
 **去除重复。** 每个域名的每个 IP 都写一行，会产生成千上万次重复：10 312 个
-Telegram 域名只得到 19 条唯一路由，而不是 10 311 行。`--dedup` 合并重复项，
+Telegram 域名只得到 19 条唯一路由，而不是 10 311 行。重复项始终合并，无法关闭；
 `--sort` 让顺序稳定。
 
 **严格保持格式。** UTF-8 无 BOM、系统原生换行、字段之间恰好一个空格、文件以

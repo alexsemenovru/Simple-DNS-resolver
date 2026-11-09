@@ -114,7 +114,7 @@ language is detected from the system; `--lang en|ru|es|zh` overrides it.
     --dns-timeout SEC     per-query timeout              (2.0)
     --jobs N              parallel lookups               (8)
     --retries N           attempts per name              (2)
-    --dedup --sort --strict --modern
+    --sort --strict --modern
     --passthrough / --no-passthrough
     --persistent          route -p add for IPv4 in win
     --lang en|ru|es|zh
@@ -140,7 +140,8 @@ opened by double-click does not close immediately.
 
 **Removes duplicates.** One line per IP per domain means thousands of repeats:
 a list of 10 312 Telegram domains yields 19 unique routes instead of 10 311
-lines. `--dedup` collapses repeats, `--sort` makes the order stable.
+lines. Duplicates are always collapsed and cannot be turned off; `--sort` makes
+the order stable.
 
 **Keeps the format.** UTF-8 without BOM, native line endings, exactly one space
 between fields, file ends with a newline. With `--strict` every line is checked

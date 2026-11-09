@@ -391,12 +391,6 @@ CATALOG = {
         "es": "tiempo de espera por consulta, en segundos",
         "zh": "单次查询超时（秒）",
     },
-    "h_dedup": {
-        "en": "collapse duplicate routes",
-        "ru": "схлопнуть повторяющиеся маршруты",
-        "es": "eliminar rutas duplicadas",
-        "zh": "合并重复路由",
-    },
     "h_sort": {
         "en": "stable order (by address and prefix)",
         "ru": "стабильный порядок (по адресу и префиксу)",
@@ -434,10 +428,10 @@ CATALOG = {
         "zh": "不把 keenetic-bat 拆成 999 行的分片",
     },
     "h_modern": {
-        "en": "preset: --dedup --sort --strict",
-        "ru": "пресет: --dedup --sort --strict",
-        "es": "preajuste: --dedup --sort --strict",
-        "zh": "预设：--dedup --sort --strict",
+        "en": "preset: --sort --strict",
+        "ru": "пресет: --sort --strict",
+        "es": "preajuste: --sort --strict",
+        "zh": "预设：--sort --strict",
     },
     "h_lang": {
         "en": "output language (default: system language)",

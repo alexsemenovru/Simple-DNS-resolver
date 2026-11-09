@@ -33,7 +33,7 @@ from urllib.parse import urlparse
 import i18n
 import dnsclient
 
-VERSION = "3.2.0"
+VERSION = "3.3.0"
 
 # Три состояния ключа пути: не указан, указан без значения, указан со значением.
 UNSET = object()
@@ -143,7 +143,9 @@ class Settings:
         self.dns_timeout = max(0.1, args.dns_timeout)
         self.passthrough = args.passthrough
         self.persistent = args.persistent
-        self.dedup = args.dedup or args.modern
+        # Повторы не нужны никогда: схлопываем их всегда, без возможности
+        # отключить — иначе на выходе снова тысячи лишних строк.
+        self.dedup = True
         self.sort = args.sort or args.modern
         self.strict = args.strict or args.modern
         self.modern = args.modern or args.strict
@@ -704,7 +706,7 @@ def finish_legacy(settings, v4_records, v6_records, counters, total):
     print(say("l_total_legacy", ok=counters["resolved"], total=total))
     print(say("l_total_ipv4", n=counters["ipv4"]))
     print(say("l_total_ipv6", n=counters["ipv6"]))
-    if settings.dedup and v4_before != len(v4_records):
+    if v4_before != len(v4_records):
         print(say("l_dups", n=v4_before - len(v4_records)))
 
     print()
@@ -826,7 +828,6 @@ def build_parser(language):
                            help=say("h_jobs"))
     behaviour.add_argument("--retries", type=int, default=2, metavar="N",
                            help=say("h_retries"))
-    behaviour.add_argument("--dedup", action="store_true", help=say("h_dedup"))
     behaviour.add_argument("--sort", action="store_true", help=say("h_sort"))
     behaviour.add_argument("--passthrough", dest="passthrough",
                            action="store_true", default=True,

@@ -115,7 +115,7 @@ sistema; `--lang en|ru|es|zh` lo cambia.
     --dns-timeout SEC     tiempo de espera por consulta  (2.0)
     --jobs N              consultas en paralelo          (8)
     --retries N           intentos por nombre            (2)
-    --dedup --sort --strict --modern
+    --sort --strict --modern
     --passthrough / --no-passthrough
     --persistent          route -p add para IPv4 en win
     --lang en|ru|es|zh
@@ -141,7 +141,8 @@ ventana no se cierre al abrir el programa con doble clic.
 
 **Quita duplicados.** Una línea por cada IP de cada dominio son miles de
 repeticiones: una lista de 10 312 dominios de Telegram produce 19 rutas únicas
-en lugar de 10 311 líneas. `--dedup` las colapsa y `--sort` fija el orden.
+en lugar de 10 311 líneas. Los duplicados se eliminan siempre y no se pueden desactivar; `--sort`
+fija el orden.
 
 **Mantiene el formato.** UTF-8 sin BOM, fin de línea propio del sistema,
 exactamente un espacio entre campos, el archivo termina con salto de línea. Con
