@@ -179,7 +179,7 @@ def query_once(server, port, name, qtype, timeout, force_tcp=False):
     return rcode, addresses, cnames
 
 
-def resolve(name, servers, timeout=2.0, depth=0):
+def resolve(name, servers, timeout=2.0, depth=0, limiter=None):
     """Спрашивает серверы по очереди. Возвращает (список IPv4, список IPv6)."""
     if depth > MAX_CNAME_DEPTH:
         raise DnsError("CNAME chain too long")
@@ -193,6 +193,8 @@ def resolve(name, servers, timeout=2.0, depth=0):
 
         for qtype, bucket in ((QTYPE_A, addresses_v4), (QTYPE_AAAA, addresses_v6)):
             try:
+                if limiter is not None:
+                    limiter.acquire()
                 rcode, addresses, cnames = query_once(server, port, name, qtype,
                                                       timeout)
             except (OSError, DnsError) as error:
@@ -215,7 +217,8 @@ def resolve(name, servers, timeout=2.0, depth=0):
             for target in cnames:
                 try:
                     nested_v4, nested_v6 = resolve(target, [(server, port)],
-                                                   timeout, depth + 1)
+                                                   timeout, depth + 1,
+                                                   limiter=limiter)
                 except (OSError, DnsError) as error:
                     last_error = error
                     # если ничего не нашли, честнее сообщить ошибку, чем

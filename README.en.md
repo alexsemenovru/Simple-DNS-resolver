@@ -113,6 +113,7 @@ language is detected from the system; `--lang en|ru|es|zh` overrides it.
     --dns IP[:PORT]       custom DNS server (repeatable)
     --dns-timeout SEC     per-query timeout              (2.0)
     --jobs N              parallel lookups               (8)
+    --qps N               lookups per second, all threads (0 — unlimited)
     --retries N           attempts per name              (2)
     --aggregate-budget N  up to N extra addresses (0 disables)
     --aggregate-max P     no blocks larger than /P     (24)
@@ -180,8 +181,9 @@ against its format template, and a mismatch exits with code 2.
 
 > **Careful with threads.** That is thousands of DNS packets within seconds. On
 > a weak home router such a run ends with a reboot instead of an error message.
-> Hence the default `--jobs 8`; for fragile networks use `--jobs 2` or
-> `--jobs 1`.
+> Hence the default `--jobs 8`. Against bursts, `--qps` works better:
+> it caps the rate, not just parallelism — `--qps 5` allows at most
+> five lookups per second across all threads.
 
 ## Building
 

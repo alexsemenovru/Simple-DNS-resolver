@@ -402,6 +402,14 @@ CATALOG = {
               "puede saturar un router doméstico",
         "zh": "并发查询数（1 = 逐个查询）；8 较安全，32 以上可能压垮家用路由器",
     },
+    "h_qps": {
+        "en": "max lookups per second across all threads (0 — unlimited)",
+        "ru": "максимум запросов в секунду, общий на все потоки "
+              "(0 — без ограничения)",
+        "es": "máximo de consultas por segundo para todos los hilos "
+              "(0 — sin límite)",
+        "zh": "所有线程合计每秒最多查询数（0 — 不限制）",
+    },
     "h_retries": {
         "en": "attempts per name on DNS failure",
         "ru": "попыток на имя при сбое DNS",

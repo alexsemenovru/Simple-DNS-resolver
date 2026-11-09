@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from contextlib import redirect_stdout
 
@@ -114,6 +115,13 @@ class Base(unittest.TestCase):
         with redirect_stdout(buf):
             code = new.main(["-o", "--lang", "ru", *arguments])
         return code, buf.getvalue()
+
+    def start_server(self, zone, rcode=0, **options):
+        """Локальный фейковый DNS-сервер (FakeDns определён ниже)."""
+        server = FakeDns(zone, rcode, **options)
+        server.start()
+        self.addCleanup(server.close)
+        return server
 
     def run_lang(self, language, *argv):
         arguments = list(argv)
@@ -654,12 +662,6 @@ class FakeDns(threading.Thread):
 class TestCustomDns(Base):
     """--dns: спрашивать конкретный сервер, а не системный резолвер."""
 
-    def start_server(self, zone, rcode=0, **options):
-        server = FakeDns(zone, rcode, **options)
-        server.start()
-        self.addCleanup(server.close)
-        return server
-
     def test_resolves_a_record(self):
         server = self.start_server({"a.example": ["5.6.7.8"]})
         self.write_input(["a.example"])
@@ -987,6 +989,46 @@ class TestPathsAndPause(Base):
         parser = new.build_parser("ru")
         settings = new.Settings(parser.parse_args(["-o", ""]), "ru")
         self.assertEqual(settings.output_path, new.DEFAULT_OUTPUT)
+
+
+class TestRateLimit(Base):
+    """--qps: общий на все потоки темп запросов, а не только параллельность."""
+
+    def test_limiter_spaces_requests(self):
+        limiter = new.RateLimiter(20)  # интервал 50 мс
+        start = time.monotonic()
+        for _ in range(3):
+            limiter.acquire()
+        elapsed = time.monotonic() - start
+        self.assertGreaterEqual(elapsed, 0.09, "два интервала должны пройти")
+        self.assertLess(elapsed, 1.0)
+
+    def test_disabled_limiter_is_free(self):
+        limiter = new.RateLimiter(0)
+        start = time.monotonic()
+        for _ in range(100):
+            limiter.acquire()
+        self.assertLess(time.monotonic() - start, 0.5)
+
+    def test_settings_qps(self):
+        parser = new.build_parser("ru")
+        self.assertIsNone(new.Settings(parser.parse_args([]), "ru").limiter)
+
+        settings = new.Settings(parser.parse_args(["--qps", "10"]), "ru")
+        self.assertIsNotNone(settings.limiter)
+        self.assertAlmostEqual(settings.limiter.interval, 0.1)
+
+    def test_qps_slows_dns_lookups(self):
+        server = self.start_server({"a.example": ["1.1.1.1"],
+                                    "b.example": ["1.1.1.2"]})
+        self.write_input(["a.example", "b.example"])
+        start = time.monotonic()
+        code, _ = self.run_new("--dns", f"127.0.0.1:{server.port}",
+                               "--qps", "10", "--jobs", "1")
+        elapsed = time.monotonic() - start
+        self.assertEqual(code, 0)
+        # 2 домена × 2 запроса (A и AAAA) при 10/с — заметно больше нуля
+        self.assertGreaterEqual(elapsed, 0.2)
 
 
 class TestLimits(Base):

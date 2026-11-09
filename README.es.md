@@ -114,6 +114,7 @@ sistema; `--lang en|ru|es|zh` lo cambia.
     --dns IP[:PORT]       servidor DNS propio (repetible)
     --dns-timeout SEC     tiempo de espera por consulta  (2.0)
     --jobs N              consultas en paralelo          (8)
+    --qps N               consultas por segundo, todos (0 — sin límite)
     --retries N           intentos por nombre            (2)
     --aggregate-budget N  hasta N direcciones extra (0 desactiva)
     --aggregate-max P     bloques no mayores que /P    (24)
@@ -184,8 +185,9 @@ un mensaje.
 
 > **Cuidado con los hilos.** Son miles de paquetes DNS en segundos. En un router
 > doméstico débil esa ejecución termina en un reinicio del router, no en un
-> mensaje de error. Por eso el valor por defecto es `--jobs 8`; en redes
-> frágiles usa `--jobs 2` o `--jobs 1`.
+> mensaje de error. Por eso el valor por defecto es `--jobs 8`. Contra
+> los picos ayuda más `--qps`: limita el ritmo, no solo el paralelismo —
+> `--qps 5` permite como máximo cinco consultas por segundo en total.
 
 ## Compilación
 

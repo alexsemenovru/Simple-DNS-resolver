@@ -25,6 +25,7 @@ import os
 import re
 import socket
 import sys
+import threading
 import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -34,10 +35,36 @@ from urllib.parse import urlparse
 import i18n
 import dnsclient
 
-VERSION = "3.4.1"
+VERSION = "3.5.0"
 
 # Потолок параллельных запросов: защита от случайного OOM, а не от атаки.
 MAX_JOBS = 256
+
+
+class RateLimiter:
+    """Общий на все потоки ограничитель: не больше N запросов в секунду.
+
+    Держит равномерный темп без пачек: каждый следующий запрос ждёт своей
+    очереди. Именно это спасает слабые домашние роутеры — параллельность
+    сама по себе пик не ограничивает.
+    """
+
+    def __init__(self, per_second):
+        self.interval = 1.0 / per_second if per_second > 0 else 0.0
+        self.lock = threading.Lock()
+        self.next_slot = 0.0
+
+    def acquire(self):
+        if not self.interval:
+            return
+        with self.lock:
+            now = time.monotonic()
+            wait = self.next_slot - now
+            if wait < 0:
+                wait = 0.0
+            self.next_slot = max(now, self.next_slot) + self.interval
+        if wait > 0:
+            time.sleep(wait)
 
 # Три состояния ключа пути: не указан, указан без значения, указан со значением.
 UNSET = object()
@@ -246,6 +273,9 @@ class Settings:
         requested_jobs = max(1, args.jobs)
         self.jobs = min(requested_jobs, MAX_JOBS)
         self.jobs_capped = requested_jobs > MAX_JOBS
+
+        self.qps = max(0, args.qps)
+        self.limiter = RateLimiter(self.qps) if self.qps else None
         self.retries = max(1, args.retries)
         self.dns_servers = dnsclient.parse_servers(args.dns)
         self.dns_timeout = max(0.1, args.dns_timeout)
@@ -546,13 +576,16 @@ def make_record(family, network, settings):
 
 
 def lookup(host, settings):
-    """Резолвит имя выбранным способом, с повторами при сбое."""
+    """Резолвит имя выбранным способом, с повторами и ограничением частоты."""
     error = None
     for attempt in range(settings.retries):
         try:
             if settings.dns_servers:
                 return dnsclient.resolve(host, settings.dns_servers,
-                                         settings.dns_timeout)
+                                         settings.dns_timeout,
+                                         limiter=settings.limiter)
+            if settings.limiter is not None:
+                settings.limiter.acquire()
             return get_all_ip_addresses(host)
         except (socket.gaierror, dnsclient.DnsError) as exc:
             error = exc
@@ -968,6 +1001,8 @@ def build_parser(language):
                            help=say("h_jobs"))
     behaviour.add_argument("--retries", type=int, default=2, metavar="N",
                            help=say("h_retries"))
+    behaviour.add_argument("--qps", type=int, default=0, metavar="N",
+                           help=say("h_qps"))
     behaviour.add_argument("--aggregate-budget", type=int, default=UNSET,
                            metavar="N", help=say("h_aggregate_budget"))
     behaviour.add_argument("--aggregate-max", type=int, default=24,
