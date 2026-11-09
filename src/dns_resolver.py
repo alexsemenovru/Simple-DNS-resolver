@@ -33,10 +33,17 @@ from urllib.parse import urlparse
 import i18n
 import dnsclient
 
-VERSION = "3.1.0"
+VERSION = "3.2.0"
+
+# Три состояния ключа пути: не указан, указан без значения, указан со значением.
+UNSET = object()
+NO_VALUE = object()
 
 # Windows-файлы вставляют в .bat, там нужен CRLF; на Linux — обычный LF.
 EOL = "\r\n" if os.name == "nt" else "\n"
+
+DEFAULT_OUTPUT = "output.txt"
+DEFAULT_IPV6_OUTPUT = "output-IPv6.txt"
 
 # Без флага — формат, родной для системы.
 DEFAULT_FORMAT = "win" if os.name == "nt" else "unix"
@@ -100,14 +107,29 @@ USELESS_V4 = [
 ]
 
 
+def path_or_default(value, default):
+    """Ключ без значения или с пустым значением — это путь по умолчанию."""
+    if value is UNSET or value is NO_VALUE or value == "":
+        return default
+    return value
+
+
 class Settings:
     """Все настройки прогона в одном месте."""
 
     def __init__(self, args, language):
         self.language = language
         self.input_path = args.input
-        self.output_path = args.output
-        self.ipv6_output_path = args.ipv6_output
+
+        # Путь вывода: ключ без значения означает «путь по умолчанию, но без
+        # паузы в конце» — так можно получить неинтерактивный запуск, не
+        # меняя имён файлов.
+        self.output_path = path_or_default(args.output, DEFAULT_OUTPUT)
+        self.ipv6_output_path = path_or_default(args.ipv6_output,
+                                                DEFAULT_IPV6_OUTPUT)
+        self.unattended = (args.output is not UNSET
+                           or args.ipv6_output is not UNSET)
+
         self.format = args.format or DEFAULT_FORMAT
         self.gateway = args.gateway
         self.interface = args.interface
@@ -127,7 +149,8 @@ class Settings:
         self.modern = args.modern or args.strict
         self.chunk = not args.no_chunk
 
-        self.pause = args.pause and sys.stdin is not None and sys.stdin.isatty()
+        self.pause = (not self.unattended) and sys.stdin is not None \
+            and sys.stdin.isatty()
 
     def spec(self):
         return FORMAT_SPECS[self.format]
@@ -515,6 +538,8 @@ def resolve_output_path(path, spec):
 def write_output(path, records, spec, settings):
     """Пишет файл (или несколько частей, если формат это требует)."""
     path = resolve_output_path(path, spec)
+    # Если указали путь в несуществующую папку — создаём её сами.
+    path.parent.mkdir(parents=True, exist_ok=True)
     lines = [record.line for record in records]
 
     if spec.chunk and settings.chunk and len(lines) > spec.chunk:
@@ -755,6 +780,8 @@ def build_epilog(language):
         spec = FORMAT_SPECS[name]
         lines.append(f"  --{name:<{width - 2}} {say(spec.example_key)}")
     lines.append("")
+    lines.append(say("h_paths"))
+    lines.append("")
     lines.append(say("h_exit_codes"))
     return "\n".join(lines)
 
@@ -770,9 +797,10 @@ def build_parser(language):
     )
     parser.add_argument("-i", "--input", default="input.txt",
                         help=say("h_input"))
-    parser.add_argument("-o", "--output", default="output.txt",
-                        help=say("h_output"))
-    parser.add_argument("--ipv6-output", default="output-IPv6.txt",
+    parser.add_argument("-o", "--output", nargs="?", const=NO_VALUE,
+                        default=UNSET, metavar="PATH", help=say("h_output"))
+    parser.add_argument("--ipv6-output", nargs="?", const=NO_VALUE,
+                        default=UNSET, metavar="PATH",
                         help=say("h_ipv6_output"))
 
     formats = parser.add_argument_group(say("h_group_format"))
@@ -811,8 +839,6 @@ def build_parser(language):
     behaviour.add_argument("--no-chunk", action="store_true",
                            help=say("h_no_chunk"))
     behaviour.add_argument("--modern", action="store_true", help=say("h_modern"))
-    behaviour.add_argument("--no-pause", dest="pause", action="store_false",
-                           help=say("h_no_pause"))
 
     language_group = parser.add_argument_group(say("h_group_lang"))
     language_group.add_argument("--lang", choices=i18n.LANGUAGES, default=None,
@@ -820,7 +846,7 @@ def build_parser(language):
 
     parser.add_argument("--version", action="version",
                         version=f"dns_resolver {VERSION}")
-    parser.set_defaults(pause=True, format=None)
+    parser.set_defaults(format=None)
     return parser
 
 

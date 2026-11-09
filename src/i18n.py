@@ -319,12 +319,16 @@ CATALOG = {
         "es": "archivo de entrada", "zh": "输入文件",
     },
     "h_output": {
-        "en": "IPv4 routes file", "ru": "файл маршрутов IPv4",
-        "es": "archivo de rutas IPv4", "zh": "IPv4 路由文件",
+        "en": "IPv4 routes file; without a path — do not wait for Enter",
+        "ru": "файл маршрутов IPv4; без пути — не ждать Enter",
+        "es": "archivo de rutas IPv4; sin ruta — no esperar a Enter",
+        "zh": "IPv4 路由文件；不带路径 — 不等待 Enter",
     },
     "h_ipv6_output": {
-        "en": "IPv6 routes file", "ru": "файл маршрутов IPv6",
-        "es": "archivo de rutas IPv6", "zh": "IPv6 路由文件",
+        "en": "IPv6 routes file; without a path — do not wait for Enter",
+        "ru": "файл маршрутов IPv6; без пути — не ждать Enter",
+        "es": "archivo de rutas IPv6; sin ruta — no esperar a Enter",
+        "zh": "IPv6 路由文件；不带路径 — 不等待 Enter",
     },
     "h_gateway": {
         "en": "gateway for win/unix/keenetic",
@@ -435,12 +439,6 @@ CATALOG = {
         "es": "preajuste: --dedup --sort --strict",
         "zh": "预设：--dedup --sort --strict",
     },
-    "h_no_pause": {
-        "en": "do not wait for Enter",
-        "ru": "не ждать Enter",
-        "es": "no esperar a Enter",
-        "zh": "不等待 Enter",
-    },
     "h_lang": {
         "en": "output language (default: system language)",
         "ru": "язык вывода (по умолчанию — язык системы)",
@@ -450,6 +448,20 @@ CATALOG = {
     "h_version": {
         "en": "show version and exit", "ru": "показать версию и выйти",
         "es": "mostrar la versión y salir", "zh": "显示版本并退出",
+    },
+    "h_paths": {
+        "en": "paths and Enter: missing output folders are created automatically.\n"
+              "If -o or --ipv6-output is given, the program does not wait for Enter\n"
+              "at the end — even when the flag has no value.",
+        "ru": "пути и Enter: если папки вывода не существует, она создаётся сама.\n"
+              "Если указан -o или --ipv6-output, программа не ждёт Enter в конце —\n"
+              "в том числе когда ключ указан без значения.",
+        "es": "rutas y Enter: las carpetas de salida que faltan se crean solas.\n"
+              "Si se indica -o o --ipv6-output, el programa no espera a Enter\n"
+              "al final, incluso cuando la opción va sin valor.",
+        "zh": "路径与 Enter：输出目录不存在时会自动创建。\n"
+              "指定 -o 或 --ipv6-output 时，程序在结束时不等待 Enter，\n"
+              "即使该参数没有带值。",
     },
     "h_examples": {
         "en": "examples:", "ru": "примеры:", "es": "ejemplos:",

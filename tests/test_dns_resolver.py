@@ -112,7 +112,7 @@ class Base(unittest.TestCase):
             arguments = ["--win", *arguments]
         buf = io.StringIO()
         with redirect_stdout(buf):
-            code = new.main(["--no-pause", "--lang", "ru", *arguments])
+            code = new.main(["-o", "--lang", "ru", *arguments])
         return code, buf.getvalue()
 
     def run_lang(self, language, *argv):
@@ -121,7 +121,7 @@ class Base(unittest.TestCase):
             arguments = ["--win", *arguments]
         buf = io.StringIO()
         with redirect_stdout(buf):
-            code = new.main(["--no-pause", "--lang", language, *arguments])
+            code = new.main(["-o", "--lang", language, *arguments])
         return code, buf.getvalue()
 
     def run_cli(self, *arguments, cwd=None):
@@ -327,7 +327,7 @@ class TestFormats(Base):
 
     def test_default_format_is_platform_native(self):
         self.write_input(["1.2.3.4"])
-        proc = self.run_cli("--no-pause", "--lang", "ru")
+        proc = self.run_cli("--lang", "ru", "-o")
         self.assertEqual(proc.returncode, 0)
         first = self.lines()[0]
         prefix = "route add " if os.name == "nt" else "ip route add "
@@ -760,6 +760,57 @@ class TestLanguage(Base):
                                  f"{key}: {language}")
 
 
+class TestPathsAndPause(Base):
+    """-o: создаёт папки и снимает паузу; без значения — путь по умолчанию."""
+
+    def test_nested_output_dir_is_created(self):
+        self.write_input(["1.2.3.4"])
+        target = os.path.join("sub", "deeper", "out.txt")
+        code, _ = self.run_new("-o", target)
+        self.assertEqual(code, 0)
+        self.assertTrue(os.path.exists(target))
+        self.assertEqual(self.lines(target),
+                         ["route add 1.2.3.4 mask 255.255.255.255 0.0.0.0"])
+
+    def test_ipv6_output_dir_is_created(self):
+        self.write_input(["2001:db8::1"])
+        target = os.path.join("v6dir", "nested", "v6.txt")
+        code, _ = self.run_new("--ipv6-output", target)
+        self.assertEqual(code, 0)
+        self.assertTrue(os.path.exists(target))
+
+    def test_dash_o_without_value_keeps_default_name(self):
+        self.write_input(["1.2.3.4"])
+        code, out = self.run_new("-o")
+        self.assertEqual(code, 0)
+        self.assertTrue(os.path.exists("output.txt"))
+        self.assertNotIn("Enter", out)
+
+    def test_pause_depends_on_output_flag(self):
+        class Tty(io.StringIO):
+            def isatty(self):
+                return True
+
+        parser = new.build_parser("ru")
+        original = new.sys.stdin
+        try:
+            new.sys.stdin = Tty()
+            self.assertTrue(new.Settings(parser.parse_args([]), "ru").pause)
+            self.assertFalse(new.Settings(parser.parse_args(["-o"]), "ru").pause)
+            self.assertFalse(
+                new.Settings(parser.parse_args(["-o", ""]), "ru").pause)
+            self.assertFalse(
+                new.Settings(parser.parse_args(["--ipv6-output", "x.txt"]),
+                             "ru").pause)
+        finally:
+            new.sys.stdin = original
+
+    def test_empty_value_means_default_path(self):
+        parser = new.build_parser("ru")
+        settings = new.Settings(parser.parse_args(["-o", ""]), "ru")
+        self.assertEqual(settings.output_path, new.DEFAULT_OUTPUT)
+
+
 class TestCli(Base):
     def test_help_lists_formats(self):
         proc = self.run_cli("--lang", "ru", "--help")
@@ -780,7 +831,7 @@ class TestCli(Base):
 
     def test_no_wait_without_tty(self):
         self.write_input(["a.example"])
-        proc = self.run_cli("--no-pause")
+        proc = self.run_cli("-o")
         self.assertEqual(proc.returncode, 0)
         self.assertNotIn(b"Enter", proc.stdout)
 

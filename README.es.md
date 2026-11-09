@@ -108,18 +108,34 @@ sistema; `--lang en|ru|es|zh` lo cambia.
 ## Opciones
 
 ```
--i, --input PATH        archivo de entrada             (input.txt)
--o, --output PATH       rutas IPv4                     (output.txt)
-    --ipv6-output PATH  rutas IPv6                     (output-IPv6.txt)
-    --dns IP[:PORT]     servidor DNS propio (repetible)
-    --dns-timeout SEC   tiempo de espera por consulta  (2.0)
-    --jobs N            consultas en paralelo          (8)
-    --retries N         intentos por nombre            (2)
+-i, --input PATH          archivo de entrada             (input.txt)
+-o, --output [PATH]       rutas IPv4                     (output.txt)
+    --ipv6-output [PATH]  rutas IPv6                     (output-IPv6.txt)
+    --dns IP[:PORT]       servidor DNS propio (repetible)
+    --dns-timeout SEC     tiempo de espera por consulta  (2.0)
+    --jobs N              consultas en paralelo          (8)
+    --retries N           intentos por nombre            (2)
     --dedup --sort --strict --modern
     --passthrough / --no-passthrough
-    --persistent        route -p add para IPv4 en win
-    --lang en|ru|es|zh  --no-pause  --version
+    --persistent          route -p add para IPv4 en win
+    --lang en|ru|es|zh
+    --version
 ```
+
+## Rutas y Enter
+
+`-o` acepta una ruta completa con carpetas; si la carpeta no existe, se crea.
+
+Si se indica `-o` o `--ipv6-output`, el programa no espera a Enter al final: es
+el modo para scripts y el programador de tareas. Si no hace falta cambiar rutas
+pero tampoco esperar, basta con la opción sin valor:
+
+```
+dns_resolver.exe -o --modern
+```
+
+Sin esas opciones al final aparece «Pulse Enter para salir...», para que la
+ventana no se cierre al abrir el programa con doble clic.
 
 ## Qué hace y qué no hace
 

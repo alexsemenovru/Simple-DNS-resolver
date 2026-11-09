@@ -17,6 +17,7 @@ if not exist "%PY%" (
 
 "%PY%" -m PyInstaller --noconfirm --clean --onefile --console ^
     --name dns_resolver ^
+    --icon "%~dp0assets\icon.ico" ^
     --paths "%~dp0src" ^
     --distpath "%~dp0dist" --workpath "%~dp0build" --specpath "%~dp0build" ^
     "%~dp0src\dns_resolver.py"

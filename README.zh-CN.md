@@ -103,18 +103,33 @@ chmod +x dns_resolver
 ## 参数
 
 ```
--i, --input PATH        输入文件                    (input.txt)
--o, --output PATH       IPv4 路由                   (output.txt)
-    --ipv6-output PATH  IPv6 路由                   (output-IPv6.txt)
-    --dns IP[:PORT]     自定义 DNS 服务器（可重复）
-    --dns-timeout SEC   单次查询超时                (2.0)
-    --jobs N            并发查询数                  (8)
-    --retries N         每个名称的尝试次数          (2)
+-i, --input PATH          输入文件                    (input.txt)
+-o, --output [PATH]       IPv4 路由                   (output.txt)
+    --ipv6-output [PATH]  IPv6 路由                   (output-IPv6.txt)
+    --dns IP[:PORT]       自定义 DNS 服务器（可重复）
+    --dns-timeout SEC     单次查询超时                (2.0)
+    --jobs N              并发查询数                  (8)
+    --retries N           每个名称的尝试次数          (2)
     --dedup --sort --strict --modern
     --passthrough / --no-passthrough
-    --persistent        win 格式下对 IPv4 使用 route -p add
-    --lang en|ru|es|zh  --no-pause  --version
+    --persistent          win 格式下对 IPv4 使用 route -p add
+    --lang en|ru|es|zh
+    --version
 ```
+
+## 路径与 Enter
+
+`-o` 接受包含目录的完整路径；目录不存在时会自动创建。
+
+指定 `-o` 或 `--ipv6-output` 后，程序在结束时不等待 Enter——这是批处理和
+计划任务模式。如果不需要改路径但也不想等待，可以只写参数而不带值：
+
+```
+dns_resolver.exe -o --modern
+```
+
+不使用这些参数时，结尾会显示「按 Enter 退出...」，以免双击运行时窗口
+立刻关闭。
 
 ## 做了什么，没做什么
 

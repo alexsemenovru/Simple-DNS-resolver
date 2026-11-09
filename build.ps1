@@ -23,6 +23,7 @@ try {
     & $Python -m PyInstaller `
         --noconfirm --clean --onefile --console `
         --name dns_resolver `
+        --icon (Join-Path $root 'assets\icon.ico') `
         --paths (Join-Path $root 'src') `
         --distpath dist --workpath build --specpath build `
         $src

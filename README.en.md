@@ -107,18 +107,34 @@ language is detected from the system; `--lang en|ru|es|zh` overrides it.
 ## Flags
 
 ```
--i, --input PATH        input file                     (input.txt)
--o, --output PATH       IPv4 routes                    (output.txt)
-    --ipv6-output PATH  IPv6 routes                    (output-IPv6.txt)
-    --dns IP[:PORT]     custom DNS server (repeatable)
-    --dns-timeout SEC   per-query timeout              (2.0)
-    --jobs N            parallel lookups               (8)
-    --retries N         attempts per name              (2)
+-i, --input PATH          input file                     (input.txt)
+-o, --output [PATH]       IPv4 routes                    (output.txt)
+    --ipv6-output [PATH]  IPv6 routes                    (output-IPv6.txt)
+    --dns IP[:PORT]       custom DNS server (repeatable)
+    --dns-timeout SEC     per-query timeout              (2.0)
+    --jobs N              parallel lookups               (8)
+    --retries N           attempts per name              (2)
     --dedup --sort --strict --modern
     --passthrough / --no-passthrough
-    --persistent        route -p add for IPv4 in win
-    --lang en|ru|es|zh  --no-pause  --version
+    --persistent          route -p add for IPv4 in win
+    --lang en|ru|es|zh
+    --version
 ```
+
+## Paths and Enter
+
+`-o` takes a full path including folders; missing folders are created.
+
+When `-o` or `--ipv6-output` is given, the program does not wait for Enter at the
+end — that is the batch and scheduler mode. If you do not need to change paths
+but want no wait either, pass the flag without a value:
+
+```
+dns_resolver.exe -o --modern
+```
+
+Without those flags you get "Press Enter to exit..." at the end, so a window
+opened by double-click does not close immediately.
 
 ## What it does and does not do
 

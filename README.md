@@ -106,18 +106,34 @@ chmod +x dns_resolver
 ## Флаги
 
 ```
--i, --input PATH        входной файл                   (input.txt)
--o, --output PATH       маршруты IPv4                  (output.txt)
-    --ipv6-output PATH  маршруты IPv6                  (output-IPv6.txt)
-    --dns IP[:PORT]     свой DNS-сервер (можно повторять)
-    --dns-timeout SEC   таймаут запроса                (2.0)
-    --jobs N            одновременных запросов         (8)
-    --retries N         попыток на имя                 (2)
+-i, --input PATH          входной файл                   (input.txt)
+-o, --output [PATH]       маршруты IPv4                  (output.txt)
+    --ipv6-output [PATH]  маршруты IPv6                  (output-IPv6.txt)
+    --dns IP[:PORT]       свой DNS-сервер (можно повторять)
+    --dns-timeout SEC     таймаут запроса                (2.0)
+    --jobs N              одновременных запросов         (8)
+    --retries N           попыток на имя                 (2)
     --dedup --sort --strict --modern
     --passthrough / --no-passthrough
-    --persistent        route -p add для IPv4 в win
-    --lang en|ru|es|zh  --no-pause  --version
+    --persistent          route -p add для IPv4 в win
+    --lang en|ru|es|zh
+    --version
 ```
+
+## Пути и Enter
+
+`-o` принимает путь целиком, вместе с папками; если папки нет, она создаётся.
+
+Если указан `-o` или `--ipv6-output`, программа не ждёт Enter в конце — это
+режим для батников и планировщика. Если путь менять не нужно, а Enter не нужен,
+достаточно ключа без значения:
+
+```
+dns_resolver.exe -o --modern
+```
+
+Без этих ключей в конце будет «Нажмите Enter для завершения...», чтобы окно не
+закрылось при запуске двойным щелчком.
 
 ## Что делает и чего не делает
 
