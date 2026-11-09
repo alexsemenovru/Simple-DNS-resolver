@@ -1,4 +1,4 @@
-﻿# Easy DNS resolver
+# Easy DNS resolver
 [Русский](README.md) | [English](README.en.md) | [Español](README.es.md) | [简体中文](README.zh-CN.md)
 
 Dominios, IP ya conocidas y subredes → rutas estáticas para Windows, Linux,
