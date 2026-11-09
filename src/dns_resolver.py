@@ -834,7 +834,21 @@ def language_from_argv(argv):
     return None
 
 
+def make_output_forgiving():
+    """Не падать, если консоль не умеет кодировать символы языка интерфейса.
+
+    Например, на Windows с кодовой страницей 1252 кириллица в перенаправленный
+    вывод не кодируется: без этого программа завершалась бы с трейсбеком.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv=None):
+    make_output_forgiving()
     argv = list(sys.argv[1:] if argv is None else argv)
     language = language_from_argv(argv) or i18n.detect_language()
 

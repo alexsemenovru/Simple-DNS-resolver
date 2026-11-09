@@ -124,6 +124,19 @@ class Base(unittest.TestCase):
             code = new.main(["--no-pause", "--lang", language, *arguments])
         return code, buf.getvalue()
 
+    def run_cli(self, *arguments, cwd=None):
+        """CLI в отдельном процессе; вывод принудительно в UTF-8.
+
+        На Windows-раннере кодировка консоли не умеет кириллицу, и без этого
+        дочерний процесс падал бы на печати справки.
+        """
+        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        return subprocess.run(
+            [sys.executable, os.path.join(SRC, "dns_resolver.py"), *arguments],
+            cwd=cwd or self.tmp.name, stdin=subprocess.DEVNULL,
+            capture_output=True, timeout=60, env=env)
+
+
 
 class TestLegacyParity(Base):
     """Старый exe и новый код в режиме --no-passthrough должны совпадать.
@@ -314,11 +327,7 @@ class TestFormats(Base):
 
     def test_default_format_is_platform_native(self):
         self.write_input(["1.2.3.4"])
-        proc = subprocess.run(
-            [sys.executable, os.path.join(SRC, "dns_resolver.py"),
-             "--no-pause", "--lang", "ru"],
-            cwd=self.tmp.name, stdin=subprocess.DEVNULL,
-            capture_output=True, timeout=60)
+        proc = self.run_cli("--no-pause", "--lang", "ru")
         self.assertEqual(proc.returncode, 0)
         first = self.lines()[0]
         prefix = "route add " if os.name == "nt" else "ip route add "
@@ -420,10 +429,7 @@ class TestFormats(Base):
 
     def test_formats_are_mutually_exclusive(self):
         self.write_input(["a.example"])
-        proc = subprocess.run(
-            [sys.executable, os.path.join(SRC, "dns_resolver.py"),
-             "--cidr", "--keenetic"], stdin=subprocess.DEVNULL,
-            capture_output=True, timeout=60)
+        proc = self.run_cli("--cidr", "--keenetic")
         self.assertNotEqual(proc.returncode, 0)
 
     def test_default_format_depends_on_platform(self):
@@ -756,10 +762,7 @@ class TestLanguage(Base):
 
 class TestCli(Base):
     def test_help_lists_formats(self):
-        proc = subprocess.run(
-            [sys.executable, os.path.join(SRC, "dns_resolver.py"),
-             "--lang", "ru", "--help"],
-            stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        proc = self.run_cli("--lang", "ru", "--help")
         text = proc.stdout.decode("utf-8")
         self.assertEqual(proc.returncode, 0)
         for name in ("--win", "--amnezia", "--keenetic-bat", "--ip"):
@@ -767,26 +770,17 @@ class TestCli(Base):
         self.assertIn("коды возврата", text)
 
     def test_slash_question_works(self):
-        proc = subprocess.run(
-            [sys.executable, os.path.join(SRC, "dns_resolver.py"), "/?",
-             "--lang", "ru"],
-            stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        proc = self.run_cli("/?", "--lang", "ru")
         self.assertEqual(proc.returncode, 0)
         self.assertIn("форматы", proc.stdout.decode("utf-8"))
 
     def test_help_in_english(self):
-        proc = subprocess.run(
-            [sys.executable, os.path.join(SRC, "dns_resolver.py"),
-             "--lang", "en", "--help"],
-            stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        proc = self.run_cli("--lang", "en", "--help")
         self.assertIn("exit codes", proc.stdout.decode("utf-8"))
 
     def test_no_wait_without_tty(self):
         self.write_input(["a.example"])
-        proc = subprocess.run(
-            [sys.executable, os.path.join(SRC, "dns_resolver.py"), "--no-pause"],
-            cwd=self.tmp.name, stdin=subprocess.DEVNULL,
-            capture_output=True, timeout=60)
+        proc = self.run_cli("--no-pause")
         self.assertEqual(proc.returncode, 0)
         self.assertNotIn(b"Enter", proc.stdout)
 
