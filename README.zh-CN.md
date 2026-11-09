@@ -1,4 +1,4 @@
-# Easy DNS resolver
+# Simple DNS resolver
 
 [Русский](README.md) | [English](README.en.md) | [Español](README.es.md) | [简体中文](README.zh-CN.md)
 
