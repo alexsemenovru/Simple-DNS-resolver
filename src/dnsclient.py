@@ -6,7 +6,7 @@
 """
 
 import ipaddress
-import random
+import secrets
 import socket
 import struct
 
@@ -19,6 +19,7 @@ RCODE_NOERROR = 0
 RCODE_NXDOMAIN = 3
 
 MAX_CNAME_DEPTH = 5
+MAX_COMPRESSION_JUMPS = 64
 
 
 class DnsError(Exception):
@@ -64,7 +65,7 @@ def read_name(data, offset):
                 end = offset + 2
             offset = pointer
             jumps += 1
-            if jumps > 64:
+            if jumps > MAX_COMPRESSION_JUMPS:
                 raise DnsError("compression loop")
             continue
 
@@ -78,7 +79,7 @@ def read_name(data, offset):
         offset += length
 
 
-def parse_response(data, query_id):
+def parse_response(data, query_id, expect_name=None, expect_qtype=None):
     """Разбирает ответ. Возвращает (rcode, truncated, адреса, cname-цели)."""
     if len(data) < 12:
         raise DnsError("short response")
@@ -91,9 +92,20 @@ def parse_response(data, query_id):
     rcode = flags & 0x000F
 
     offset = 12
-    for _ in range(qdcount):
-        _, offset = read_name(data, offset)
+    for index in range(qdcount):
+        question_name, offset = read_name(data, offset)
+        if offset + 4 > len(data):
+            raise DnsError("truncated question")
+        question_type, _ = struct.unpack("!HH", data[offset:offset + 4])
         offset += 4
+
+        # Ответ должен относиться к тому, о чём спрашивали: иначе сервер (или
+        # тот, кто подсунул пакет) может подменить данные при верном ID.
+        if index == 0 and expect_name is not None:
+            same_name = (question_name.rstrip(".").lower()
+                         == expect_name.rstrip(".").lower())
+            if not same_name or question_type != expect_qtype:
+                raise DnsError("response does not match the question")
 
     addresses = []
     cnames = []
@@ -124,12 +136,13 @@ def parse_response(data, query_id):
 
 
 def send_udp(server, port, packet, timeout):
+    """UDP-запрос на соединённом сокете: ядро само отсекает чужие ответы."""
     with socket.socket(socket.AF_INET6 if ":" in server else socket.AF_INET,
                        socket.SOCK_DGRAM) as sock:
         sock.settimeout(timeout)
-        sock.sendto(packet, (server, port))
-        data, _ = sock.recvfrom(4096)
-    return data
+        sock.connect((server, port))
+        sock.send(packet)
+        return sock.recv(4096)
 
 
 def send_tcp(server, port, packet, timeout):
@@ -152,12 +165,13 @@ def send_tcp(server, port, packet, timeout):
 
 def query_once(server, port, name, qtype, timeout, force_tcp=False):
     """Один запрос. При усечении ответа повторяет его по TCP."""
-    query_id = random.getrandbits(16)
+    query_id = secrets.randbits(16)
     packet = build_query(name, qtype, query_id)
 
     data = (send_tcp(server, port, packet, timeout) if force_tcp
             else send_udp(server, port, packet, timeout))
-    rcode, truncated, addresses, cnames = parse_response(data, query_id)
+    rcode, truncated, addresses, cnames = parse_response(
+        data, query_id, expect_name=name, expect_qtype=qtype)
 
     if truncated and not force_tcp:
         return query_once(server, port, name, qtype, timeout, force_tcp=True)
@@ -165,8 +179,11 @@ def query_once(server, port, name, qtype, timeout, force_tcp=False):
     return rcode, addresses, cnames
 
 
-def resolve(name, servers, timeout=2.0):
+def resolve(name, servers, timeout=2.0, depth=0):
     """Спрашивает серверы по очереди. Возвращает (список IPv4, список IPv6)."""
+    if depth > MAX_CNAME_DEPTH:
+        raise DnsError("CNAME chain too long")
+
     last_error = None
 
     for server, port in servers:
@@ -182,9 +199,14 @@ def resolve(name, servers, timeout=2.0):
                 last_error = error
                 continue
 
-            answered = True
             if rcode == RCODE_NXDOMAIN:
                 return [], []
+            if rcode != RCODE_NOERROR:
+                # SERVFAIL и прочие отказы — это ошибка, а не «адресов нет»
+                last_error = DnsError(f"{server} returned rcode {rcode}")
+                continue
+
+            answered = True
 
             for address in addresses:
                 bucket.add(address)
@@ -193,8 +215,13 @@ def resolve(name, servers, timeout=2.0):
             for target in cnames:
                 try:
                     nested_v4, nested_v6 = resolve(target, [(server, port)],
-                                                   timeout)
-                except (OSError, DnsError):
+                                                   timeout, depth + 1)
+                except (OSError, DnsError) as error:
+                    last_error = error
+                    # если ничего не нашли, честнее сообщить ошибку, чем
+                    # «адресов нет»: цепочка CNAME оборвалась
+                    if not addresses_v4 and not addresses_v6:
+                        answered = False
                     continue
                 addresses_v4.update(nested_v4)
                 addresses_v6.update(nested_v6)

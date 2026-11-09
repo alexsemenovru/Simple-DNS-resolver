@@ -263,6 +263,12 @@ CATALOG = {
         "es": "Pulse Enter para salir...",
         "zh": "按 Enter 退出...",
     },
+    "l_jobs_capped": {
+        "en": "Note: --jobs is capped at {limit} parallel lookups",
+        "ru": "Замечание: --jobs ограничен {limit} одновременными запросами",
+        "es": "Nota: --jobs se limita a {limit} consultas en paralelo",
+        "zh": "提示：--jobs 最多为 {limit} 个并发查询",
+    },
     "l_using_dns": {
         "en": "DNS servers: {servers}",
         "ru": "DNS-серверы: {servers}",

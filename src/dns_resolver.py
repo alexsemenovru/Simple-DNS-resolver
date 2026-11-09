@@ -34,7 +34,10 @@ from urllib.parse import urlparse
 import i18n
 import dnsclient
 
-VERSION = "3.4.0"
+VERSION = "3.4.1"
+
+# Потолок параллельных запросов: защита от случайного OOM, а не от атаки.
+MAX_JOBS = 256
 
 # Три состояния ключа пути: не указан, указан без значения, указан со значением.
 UNSET = object()
@@ -240,7 +243,9 @@ class Settings:
         self.comment = args.comment
         self.iface = args.iface
 
-        self.jobs = max(1, args.jobs)
+        requested_jobs = max(1, args.jobs)
+        self.jobs = min(requested_jobs, MAX_JOBS)
+        self.jobs_capped = requested_jobs > MAX_JOBS
         self.retries = max(1, args.retries)
         self.dns_servers = dnsclient.parse_servers(args.dns)
         self.dns_timeout = max(0.1, args.dns_timeout)
@@ -787,6 +792,8 @@ def run(settings):
         return 0
 
     print(say("l_read", n=len(lines)))
+    if settings.jobs_capped:
+        print(say("l_jobs_capped", limit=MAX_JOBS))
     if settings.dns_servers:
         print(say("l_using_dns", servers=", ".join(
             f"{host}:{port}" for host, port in settings.dns_servers)))

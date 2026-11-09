@@ -575,12 +575,18 @@ UDP_LOOPBACK = udp_loopback_works()
 
 
 class FakeDns(threading.Thread):
-    """Крошечный UDP-сервер DNS для тестов: отвечает по словарю zone."""
+    """Крошечный UDP-сервер DNS для тестов: отвечает по словарю zone.
 
-    def __init__(self, zone, rcode=0):
+    cname_target — вместо адресов вернуть CNAME (можно замкнуть петлю).
+    wrong_question — подменить имя в секции вопроса, оставив тот же ID.
+    """
+
+    def __init__(self, zone, rcode=0, cname_target=None, wrong_question=False):
         super().__init__(daemon=True)
         self.zone = {name.lower(): ips for name, ips in zone.items()}
         self.rcode = rcode
+        self.cname_target = cname_target
+        self.wrong_question = wrong_question
         self.queries = 0
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("127.0.0.1", 0))
@@ -605,11 +611,19 @@ class FakeDns(threading.Thread):
         qtype, _ = struct.unpack("!HH", query[offset:offset + 4])
         question = query[12:offset + 4]
 
+        if self.wrong_question:
+            question = dnsclient.encode_name("evil.example") + struct.pack(
+                "!HH", qtype, 1)
+
         key = name.lower()
         rcode = self.rcode
         records = []
 
-        if rcode == 0:
+        if rcode == 0 and self.cname_target:
+            target = dnsclient.encode_name(self.cname_target)
+            records.append(struct.pack("!HHHIH", 0xC00C, 5, 1, 60,
+                                       len(target)) + target)
+        elif rcode == 0:
             if key not in self.zone:
                 rcode = 3
             else:
@@ -640,8 +654,8 @@ class FakeDns(threading.Thread):
 class TestCustomDns(Base):
     """--dns: спрашивать конкретный сервер, а не системный резолвер."""
 
-    def start_server(self, zone, rcode=0):
-        server = FakeDns(zone, rcode)
+    def start_server(self, zone, rcode=0, **options):
+        server = FakeDns(zone, rcode, **options)
         server.start()
         self.addCleanup(server.close)
         return server
@@ -708,6 +722,34 @@ class TestCustomDns(Base):
         code, out = self.run_new("--dns", "not-an-ip")
         self.assertEqual(code, 2)
         self.assertIn("Некорректный DNS-сервер", out)
+
+    def test_cname_loop_is_bounded(self):
+        server = self.start_server({}, cname_target="a.example")
+        self.write_input(["a.example"])
+        code, out = self.run_new("--dns", f"127.0.0.1:{server.port}",
+                                 "--retries", "1")
+        self.assertEqual(code, 0)
+        self.assertIn("Не удалось разрешить имя хоста", out)
+        self.assertLess(server.queries, 400, "петля CNAME должна обрываться")
+
+    def test_response_with_wrong_question_rejected(self):
+        server = self.start_server({"a.example": ["5.6.7.8"]},
+                                   wrong_question=True)
+        self.write_input(["a.example"])
+        code, out = self.run_new("--dns", f"127.0.0.1:{server.port}",
+                                 "--retries", "1")
+        self.assertEqual(code, 0)
+        self.assertIn("Не удалось разрешить имя хоста", out)
+        self.assertEqual(self.read(), b"", "ответ на чужой вопрос не принимаем")
+
+    def test_servfail_reported_as_error(self):
+        server = self.start_server({}, rcode=2)
+        self.write_input(["a.example"])
+        code, out = self.run_new("--dns", f"127.0.0.1:{server.port}",
+                                 "--retries", "1")
+        self.assertEqual(code, 0)
+        self.assertIn("Не удалось разрешить имя хоста", out)
+        self.assertNotIn("не найдено IP адресов", out)
 
 
 class TestDnsProtocol(unittest.TestCase):
@@ -945,6 +987,28 @@ class TestPathsAndPause(Base):
         parser = new.build_parser("ru")
         settings = new.Settings(parser.parse_args(["-o", ""]), "ru")
         self.assertEqual(settings.output_path, new.DEFAULT_OUTPUT)
+
+
+class TestLimits(Base):
+    """Потолок параллельных запросов: не даём случайно уйти в OOM."""
+
+    def test_jobs_capped(self):
+        parser = new.build_parser("ru")
+        settings = new.Settings(parser.parse_args(["--jobs", "10000"]), "ru")
+        self.assertEqual(settings.jobs, new.MAX_JOBS)
+        self.assertTrue(settings.jobs_capped)
+
+    def test_jobs_cap_warns(self):
+        self.write_input(["1.2.3.4"])
+        code, out = self.run_new("--jobs", "10000")
+        self.assertEqual(code, 0)
+        self.assertIn(f"--jobs ограничен {new.MAX_JOBS}", out)
+
+    def test_reasonable_jobs_not_flagged(self):
+        parser = new.build_parser("ru")
+        settings = new.Settings(parser.parse_args(["--jobs", "16"]), "ru")
+        self.assertEqual(settings.jobs, 16)
+        self.assertFalse(settings.jobs_capped)
 
 
 class TestCli(Base):
